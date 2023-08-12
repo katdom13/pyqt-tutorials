@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "pyqt-tutorials"
+version = "0.1.0"
+description = "Introductory tutorial to PyQT6"
+authors = ["katdom13 <katdom13@gmail.com>>"]
+readme = "README.md"
+packages = [{include = "pyqt_tutorials"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pyqt6 = "^6.5.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
