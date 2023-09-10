@@ -1,76 +1,74 @@
-# https://www.pythonguis.com/tutorials/pyqt6-layouts/
+# https://www.pythonguis.com/tutorials/pyqt6-actions-toolbars-menus/
 
 import sys
-
 from PyQt6.QtWidgets import (
-    QApplication,
-    QHBoxLayout,
-    QMainWindow,
-    QPushButton,
-    QStackedLayout,
-    QVBoxLayout,
-    QWidget,
+    QMainWindow, QApplication,
+    QLabel, QToolBar, QStatusBar, QCheckBox
 )
-
-from PyQt6.QtGui import QPalette, QColor
-
-
-class Color(QWidget):
-
-    def __init__(self, color):
-        super(Color, self).__init__()
-        self.setAutoFillBackground(True)
-
-        palette = self.palette()
-        palette.setColor(QPalette.ColorRole.Window, QColor(color))
-        self.setPalette(palette)
+from PyQt6.QtGui import QAction, QIcon, QKeySequence
+from PyQt6.QtCore import Qt, QSize
 
 
 class MainWindow(QMainWindow):
+
     def __init__(self):
         super().__init__()
 
         self.setWindowTitle("My App")
 
-        pagelayout = QVBoxLayout()
-        button_layout = QHBoxLayout()
-        self.stacklayout = QStackedLayout()
+        label = QLabel("Hello!")
 
-        pagelayout.addLayout(button_layout)
-        pagelayout.addLayout(self.stacklayout)
+        # The `Qt` namespace has a lot of attributes to customize
+        # widgets. See: http://doc.qt.io/qt-5/qt.html
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        btn = QPushButton("red")
-        btn.pressed.connect(self.activate_tab_1)
-        button_layout.addWidget(btn)
-        self.stacklayout.addWidget(Color("red"))
+        # Set the central widget of the Window. Widget will expand
+        # to take up all the space in the window by default.
+        self.setCentralWidget(label)
 
-        btn = QPushButton("green")
-        btn.pressed.connect(self.activate_tab_2)
-        button_layout.addWidget(btn)
-        self.stacklayout.addWidget(Color("green"))
+        toolbar = QToolBar("My main toolbar")
+        toolbar.setIconSize(QSize(16, 16))
+        self.addToolBar(toolbar)
 
-        btn = QPushButton("yellow")
-        btn.pressed.connect(self.activate_tab_3)
-        button_layout.addWidget(btn)
-        self.stacklayout.addWidget(Color("yellow"))
+        button_action = QAction(QIcon("bug.png"), "&Your button", self)
+        button_action.setStatusTip("This is your button")
+        button_action.triggered.connect(self.onMyToolBarButtonClick)
+        button_action.setCheckable(True)
+        # You can enter keyboard shortcuts using key names (e.g. Ctrl+p)
+        # Qt.namespace identifiers (e.g. Qt.CTRL + Qt.Key_P)
+        # or system agnostic identifiers (e.g. QKeySequence.StandardKey.Print)
+        button_action.setShortcut(QKeySequence("Ctrl+p"))
+        toolbar.addAction(button_action)
 
-        widget = QWidget()
-        widget.setLayout(pagelayout)
-        self.setCentralWidget(widget)
+        toolbar.addSeparator()
 
-    def activate_tab_1(self):
-        self.stacklayout.setCurrentIndex(0)
+        button_action2 = QAction(QIcon("bug.png"), "Your &button2", self)
+        button_action2.setStatusTip("This is your button2")
+        button_action2.triggered.connect(self.onMyToolBarButtonClick)
+        button_action2.setCheckable(True)
+        toolbar.addAction(button_action)
 
-    def activate_tab_2(self):
-        self.stacklayout.setCurrentIndex(1)
+        toolbar.addWidget(QLabel("Hello"))
+        toolbar.addWidget(QCheckBox())
 
-    def activate_tab_3(self):
-        self.stacklayout.setCurrentIndex(2)
+        self.setStatusBar(QStatusBar(self))
+
+        menu = self.menuBar()
+
+        file_menu = menu.addMenu("&File")
+        file_menu.addAction(button_action)
+
+        file_menu.addSeparator()
+
+        file_submenu = file_menu.addMenu("Submenu")
+
+        file_submenu.addAction(button_action2)
+
+    def onMyToolBarButtonClick(self, s):
+        print("click", s)
 
 
 app = QApplication(sys.argv)
-
-window = MainWindow()
-window.show()
-
+w = MainWindow()
+w.show()
 app.exec()
