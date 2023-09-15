@@ -2,14 +2,17 @@
 name = "pyqt-tutorials"
 version = "0.1.0"
 description = "Introductory tutorial to PyQT6"
-authors = ["katdom13 <katdom13@gmail.com>>"]
+authors = ["katdom13 <katdom13@gmail.com>"]
 readme = "README.md"
 packages = [{include = "pyqt_tutorials"}]
 
 [tool.poetry.dependencies]
-python = "^3.11"
-pyqt6 = "^6.5.2"
+python = "^3.9.13"
+pyqt6 = "6.4.2"
+pyqt6-tools = "^6.4.2.3.3"
 
+[tool.poetry.dev-dependencies]
+pytype = { version = ">=2020.06.01", markers = "python_version < '3.9' and platform_system != 'Windows'"}
 
 [build-system]
 requires = ["poetry-core"]
