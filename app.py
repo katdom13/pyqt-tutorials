@@ -1,26 +1,48 @@
-# https://www.pythonguis.com/tutorials/pyqt6-first-steps-qt-designer/
+# https://www.pythonguis.com/tutorials/pyqt6-creating-dialogs-qt-designer/
 
-# First steps with Qt Designer
-# Use Qt Designer's drag and drop interface to design your PyQt6 GUI
+# Creating Dialogs With Qt Designer
+# Using the drag and drop editor to build PyQt6 dialogs
 
 import sys
-from PyQt6 import QtWidgets, uic
 
-from MainWindow import Ui_MainWindow
+from PyQt6.QtWidgets import QApplication, QDialog, QMainWindow, QPushButton
 
-
-class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
-    def __init__(self, *args, obj=None, **kwargs):
-        super(MainWindow, self).__init__(*args, **kwargs)
-        self.setupUi(self)
+from employee_dlg import Ui_Dialog
 
 
-app = QtWidgets.QApplication(sys.argv)
+class Window(QMainWindow):
+    """Main window."""
+    def __init__(self, parent=None):
+        """Initializer."""
+        super().__init__(parent)
+        # Use a QPushButton for the central widget
+        self.centralWidget = QPushButton("Employee...")
+        # Connect the .clicked() signal with the .onEmployeeBtnClicked() slot
+        self.centralWidget.clicked.connect(self.onEmployeeBtnClicked)
+        self.setCentralWidget(self.centralWidget)
 
-window = MainWindow()
-window.show()
-app.exec()
+    # Create a slot for launching the employee dialog
+    def onEmployeeBtnClicked(self):
+        """Launch the employee dialog."""
+        dlg = EmployeeDlg(self)
+        dlg.exec()
 
 
-# Converting your .ui file to Python
-# pyuic6 mainwindow.ui -o MainWindow.py
+class EmployeeDlg(QDialog):
+    """Employee dialog."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Create an instance of the GUI
+        self.ui = Ui_Dialog()
+        # Run the .setupUi() method to show the GUI
+        self.ui.setupUi(self)
+
+
+if __name__ == "__main__":
+    # Create the application
+    app = QApplication(sys.argv)
+    # Create and show the application's main window
+    win = Window()
+    win.show()
+    # Run the application's main loop
+    sys.exit(app.exec())
