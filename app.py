@@ -1,134 +1,97 @@
-# https://www.pythonguis.com/tutorials/multithreading-pyqt6-applications-qthreadpool/
+# https://www.pythonguis.com/tutorials/pyqt6-qprocess-external-programs/
 
-# Multithreading PyQt6 applications with QThreadPool
-# Run background tasks concurrently without impacting your UI
+# Using QProcess to run external programs
+# Run background programs without impacting your UI
 
-from PyQt6.QtGui import *
-from PyQt6.QtWidgets import *
-from PyQt6.QtCore import *
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QPlainTextEdit,
+                                QVBoxLayout, QWidget, QProgressBar)
+from PyQt6.QtCore import QProcess
+import sys
+import re
 
-import traceback, sys, time
+# A regular expression, to extract the % complete.
+progress_re = re.compile("Total complete: (\d+)%")
 
-
-class WorkerSignals(QObject):
-    '''
-    Defines the signals available from a running worker thread.
-
-    Supported signals are:
-
-    finished
-        No data
-
-    error
-        tuple (exctype, value, traceback.format_exc() )
-
-    result
-        object data returned from processing, anything
-
-    '''
-    finished = pyqtSignal()
-    error = pyqtSignal(tuple)
-    result = pyqtSignal(object)
-
-
-class Worker(QRunnable):
-    '''
-    Worker thread
-
-    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
-
-    :param callback: The function callback to run on this worker thread. Supplied args and
-                     kwargs will be passed through to the runner.
-    :type callback: function
-    :param args: Arguments to pass to the callback function
-    :param kwargs: Keywords to pass to the callback function
-
-    '''
-
-    def __init__(self, fn, *args, **kwargs):
-        super(Worker, self).__init__()
-        # Store constructor arguments (re-used for processing)
-        self.fn = fn
-        self.args = args
-        self.kwargs = kwargs
-        self.signals = WorkerSignals()
-
-    @pyqtSlot()
-    def run(self):
-        '''
-        Initialise the runner function with passed args, kwargs.
-        '''
-
-        # Retrieve args/kwargs here; and fire processing using them
-        try:
-            result = self.fn(
-                *self.args, **self.kwargs
-            )
-        except:
-            traceback.print_exc()
-            exctype, value = sys.exc_info()[:2]
-            self.signals.error.emit((exctype, value, traceback.format_exc()))
-        else:
-            self.signals.result.emit(result)  # Return the result of the processing
-        finally:
-            self.signals.finished.emit()  # Done
+def simple_percent_parser(output):
+    """
+    Matches lines using the progress_re regex,
+    returning a single integer for the % progress.
+    """
+    m = progress_re.search(output)
+    if m:
+        pc_complete = m.group(1)
+        return int(pc_complete)
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, *args, **kwargs):
-        super(MainWindow, self).__init__(*args, **kwargs)
 
-        self.counter = 0
+    def __init__(self):
+        super().__init__()
 
-        layout = QVBoxLayout()
+        self.p = None
 
-        self.l = QLabel("Start")
-        b = QPushButton("DANGER!")
-        b.pressed.connect(self.oh_no)
+        self.btn = QPushButton("Execute")
+        self.btn.pressed.connect(self.start_process)
+        self.text = QPlainTextEdit()
+        self.text.setReadOnly(True)
 
-        layout.addWidget(self.l)
-        layout.addWidget(b)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+
+        l = QVBoxLayout()
+        l.addWidget(self.btn)
+        l.addWidget(self.progress)
+        l.addWidget(self.text)
 
         w = QWidget()
-        w.setLayout(layout)
+        w.setLayout(l)
 
         self.setCentralWidget(w)
 
-        self.show()
+    def message(self, s):
+        self.text.appendPlainText(s)
 
-        self.timer = QTimer()
-        self.timer.setInterval(1000)
-        self.timer.timeout.connect(self.recurring_timer)
-        self.timer.start()
+    def start_process(self):
+        if self.p is None:  # No process running.
+            self.message("Executing process")
+            self.p = QProcess()  # Keep a reference to the QProcess (e.g. on self) while it's running.
+            self.p.readyReadStandardOutput.connect(self.handle_stdout)
+            self.p.readyReadStandardError.connect(self.handle_stderr)
+            self.p.stateChanged.connect(self.handle_state)
+            self.p.finished.connect(self.process_finished)  # Clean up once complete.
+            self.p.start("python", ['dummy_script.py'])
 
-        self.threadpool = QThreadPool()
-        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
+    def handle_stderr(self):
+        data = self.p.readAllStandardError()
+        stderr = bytes(data).decode("utf8")
+        # Extract progress if it is in the data.
+        progress = simple_percent_parser(stderr)
+        if progress:
+            self.progress.setValue(progress)
+        self.message(stderr)
 
-    def execute_this_fn(self):
-        for n in range(0, 5):
-            time.sleep(1)
-        return "Done."
+    def handle_stdout(self):
+        data = self.p.readAllStandardOutput()
+        stdout = bytes(data).decode("utf8")
+        self.message(stdout)
 
-    def print_output(self, s):
-        print(s)
+    def handle_state(self, state):
+        states = {
+            QProcess.ProcessState.NotRunning: 'Not running',
+            QProcess.ProcessState.Starting: 'Starting',
+            QProcess.ProcessState.Running: 'Running',
+        }
+        state_name = states[state]
+        self.message(f"State changed: {state_name}")
 
-    def thread_complete(self):
-        print("THREAD COMPLETE!")
-
-    def oh_no(self):
-        # Pass the function to execute
-        worker = Worker(self.execute_this_fn) # Any other args, kwargs are passed to the run function
-        worker.signals.result.connect(self.print_output)
-        worker.signals.finished.connect(self.thread_complete)
-
-        # Execute
-        self.threadpool.start(worker)
-
-    def recurring_timer(self):
-        self.counter +=1
-        self.l.setText("Counter: %d" % self.counter)
+    def process_finished(self):
+        self.message("Process finished.")
+        self.p = None
 
 
-app = QApplication([])
-window = MainWindow()
+app = QApplication(sys.argv)
+
+w = MainWindow()
+w.show()
+
 app.exec()
