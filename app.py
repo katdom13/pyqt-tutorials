@@ -1,48 +1,134 @@
-# https://www.pythonguis.com/tutorials/pyqt6-creating-dialogs-qt-designer/
+# https://www.pythonguis.com/tutorials/multithreading-pyqt6-applications-qthreadpool/
 
-# Creating Dialogs With Qt Designer
-# Using the drag and drop editor to build PyQt6 dialogs
+# Multithreading PyQt6 applications with QThreadPool
+# Run background tasks concurrently without impacting your UI
 
-import sys
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import *
 
-from PyQt6.QtWidgets import QApplication, QDialog, QMainWindow, QPushButton
-
-from employee_dlg import Ui_Dialog
-
-
-class Window(QMainWindow):
-    """Main window."""
-    def __init__(self, parent=None):
-        """Initializer."""
-        super().__init__(parent)
-        # Use a QPushButton for the central widget
-        self.centralWidget = QPushButton("Employee...")
-        # Connect the .clicked() signal with the .onEmployeeBtnClicked() slot
-        self.centralWidget.clicked.connect(self.onEmployeeBtnClicked)
-        self.setCentralWidget(self.centralWidget)
-
-    # Create a slot for launching the employee dialog
-    def onEmployeeBtnClicked(self):
-        """Launch the employee dialog."""
-        dlg = EmployeeDlg(self)
-        dlg.exec()
+import traceback, sys, time
 
 
-class EmployeeDlg(QDialog):
-    """Employee dialog."""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        # Create an instance of the GUI
-        self.ui = Ui_Dialog()
-        # Run the .setupUi() method to show the GUI
-        self.ui.setupUi(self)
+class WorkerSignals(QObject):
+    '''
+    Defines the signals available from a running worker thread.
+
+    Supported signals are:
+
+    finished
+        No data
+
+    error
+        tuple (exctype, value, traceback.format_exc() )
+
+    result
+        object data returned from processing, anything
+
+    '''
+    finished = pyqtSignal()
+    error = pyqtSignal(tuple)
+    result = pyqtSignal(object)
 
 
-if __name__ == "__main__":
-    # Create the application
-    app = QApplication(sys.argv)
-    # Create and show the application's main window
-    win = Window()
-    win.show()
-    # Run the application's main loop
-    sys.exit(app.exec())
+class Worker(QRunnable):
+    '''
+    Worker thread
+
+    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
+
+    :param callback: The function callback to run on this worker thread. Supplied args and
+                     kwargs will be passed through to the runner.
+    :type callback: function
+    :param args: Arguments to pass to the callback function
+    :param kwargs: Keywords to pass to the callback function
+
+    '''
+
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+    @pyqtSlot()
+    def run(self):
+        '''
+        Initialise the runner function with passed args, kwargs.
+        '''
+
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            result = self.fn(
+                *self.args, **self.kwargs
+            )
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        else:
+            self.signals.result.emit(result)  # Return the result of the processing
+        finally:
+            self.signals.finished.emit()  # Done
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, *args, **kwargs):
+        super(MainWindow, self).__init__(*args, **kwargs)
+
+        self.counter = 0
+
+        layout = QVBoxLayout()
+
+        self.l = QLabel("Start")
+        b = QPushButton("DANGER!")
+        b.pressed.connect(self.oh_no)
+
+        layout.addWidget(self.l)
+        layout.addWidget(b)
+
+        w = QWidget()
+        w.setLayout(layout)
+
+        self.setCentralWidget(w)
+
+        self.show()
+
+        self.timer = QTimer()
+        self.timer.setInterval(1000)
+        self.timer.timeout.connect(self.recurring_timer)
+        self.timer.start()
+
+        self.threadpool = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
+
+    def execute_this_fn(self):
+        for n in range(0, 5):
+            time.sleep(1)
+        return "Done."
+
+    def print_output(self, s):
+        print(s)
+
+    def thread_complete(self):
+        print("THREAD COMPLETE!")
+
+    def oh_no(self):
+        # Pass the function to execute
+        worker = Worker(self.execute_this_fn) # Any other args, kwargs are passed to the run function
+        worker.signals.result.connect(self.print_output)
+        worker.signals.finished.connect(self.thread_complete)
+
+        # Execute
+        self.threadpool.start(worker)
+
+    def recurring_timer(self):
+        self.counter +=1
+        self.l.setText("Counter: %d" % self.counter)
+
+
+app = QApplication([])
+window = MainWindow()
+app.exec()
