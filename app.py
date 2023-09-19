@@ -1,97 +1,103 @@
-# https://www.pythonguis.com/tutorials/pyqt6-qprocess-external-programs/
+# https://www.pythonguis.com/tutorials/pyqt6-modelview-architecture/
 
-# Using QProcess to run external programs
-# Run background programs without impacting your UI
+# The ModelView Architecture
+# Qt's MVC-like interface for displaying data in views
 
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QPlainTextEdit,
-                                QVBoxLayout, QWidget, QProgressBar)
-from PyQt6.QtCore import QProcess
 import sys
-import re
-
-# A regular expression, to extract the % complete.
-progress_re = re.compile("Total complete: (\d+)%")
-
-def simple_percent_parser(output):
-    """
-    Matches lines using the progress_re regex,
-    returning a single integer for the % progress.
-    """
-    m = progress_re.search(output)
-    if m:
-        pc_complete = m.group(1)
-        return int(pc_complete)
+import json
+from PyQt6 import QtCore, QtGui, QtWidgets, uic
+from PyQt6.QtCore import Qt
 
 
-class MainWindow(QMainWindow):
+qt_creator_file = "todo.ui"
+Ui_MainWindow, QtBaseClass = uic.loadUiType(qt_creator_file)
+tick = QtGui.QImage('tick.png')
 
+
+class TodoModel(QtCore.QAbstractListModel):
+    def __init__(self, *args, todos=None, **kwargs):
+        super(TodoModel, self).__init__(*args, **kwargs)
+        self.todos = todos or []
+
+    def data(self, index, role):
+        if role == Qt.ItemDataRole.DisplayRole:
+            _, text = self.todos[index.row()]
+            return text
+
+        if role == Qt.ItemDataRole.DecorationRole:
+            status, _ = self.todos[index.row()]
+            if status:
+                return tick
+
+    def rowCount(self, index):
+        return len(self.todos)
+
+
+class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self):
-        super().__init__()
+        super(MainWindow, self).__init__()
+        self.setupUi(self)
+        self.model = TodoModel()
+        self.load()
+        self.todoView.setModel(self.model)
+        self.addButton.pressed.connect(self.add)
+        self.deleteButton.pressed.connect(self.delete)
+        self.completeButton.pressed.connect(self.complete)
 
-        self.p = None
+    def add(self):
+        """
+        Add an item to our todo list, getting the text from the QLineEdit .todoEdit
+        and then clearing it.
+        """
+        text = self.todoEdit.text()
+        if text: # Don't add empty strings.
+            # Access the list via the model.
+            self.model.todos.append((False, text))
+            # Trigger refresh.
+            self.model.layoutChanged.emit()
+            # Empty the input
+            self.todoEdit.setText("")
+            self.save()
 
-        self.btn = QPushButton("Execute")
-        self.btn.pressed.connect(self.start_process)
-        self.text = QPlainTextEdit()
-        self.text.setReadOnly(True)
+    def delete(self):
+        indexes = self.todoView.selectedIndexes()
+        if indexes:
+            # Indexes is a list of a single item in single-select mode.
+            index = indexes[0]
+            # Remove the item and refresh.
+            del self.model.todos[index.row()]
+            self.model.layoutChanged.emit()
+            # Clear the selection (as it is no longer valid).
+            self.todoView.clearSelection()
+            self.save()
 
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
+    def complete(self):
+        indexes = self.todoView.selectedIndexes()
+        if indexes:
+            index = indexes[0]
+            row = index.row()
+            status, text = self.model.todos[row]
+            self.model.todos[row] = (True, text)
+            # .dataChanged takes top-left and bottom right, which are equal
+            # for a single selection.
+            self.model.dataChanged.emit(index, index)
+            # Clear the selection (as it is no longer valid).
+            self.todoView.clearSelection()
+            self.save()
 
-        l = QVBoxLayout()
-        l.addWidget(self.btn)
-        l.addWidget(self.progress)
-        l.addWidget(self.text)
+    def load(self):
+        try:
+            with open('data.db', 'r') as f:
+                self.model.todos = json.load(f)
+        except Exception:
+            pass
 
-        w = QWidget()
-        w.setLayout(l)
-
-        self.setCentralWidget(w)
-
-    def message(self, s):
-        self.text.appendPlainText(s)
-
-    def start_process(self):
-        if self.p is None:  # No process running.
-            self.message("Executing process")
-            self.p = QProcess()  # Keep a reference to the QProcess (e.g. on self) while it's running.
-            self.p.readyReadStandardOutput.connect(self.handle_stdout)
-            self.p.readyReadStandardError.connect(self.handle_stderr)
-            self.p.stateChanged.connect(self.handle_state)
-            self.p.finished.connect(self.process_finished)  # Clean up once complete.
-            self.p.start("python", ['dummy_script.py'])
-
-    def handle_stderr(self):
-        data = self.p.readAllStandardError()
-        stderr = bytes(data).decode("utf8")
-        # Extract progress if it is in the data.
-        progress = simple_percent_parser(stderr)
-        if progress:
-            self.progress.setValue(progress)
-        self.message(stderr)
-
-    def handle_stdout(self):
-        data = self.p.readAllStandardOutput()
-        stdout = bytes(data).decode("utf8")
-        self.message(stdout)
-
-    def handle_state(self, state):
-        states = {
-            QProcess.ProcessState.NotRunning: 'Not running',
-            QProcess.ProcessState.Starting: 'Starting',
-            QProcess.ProcessState.Running: 'Running',
-        }
-        state_name = states[state]
-        self.message(f"State changed: {state_name}")
-
-    def process_finished(self):
-        self.message("Process finished.")
-        self.p = None
+    def save(self):
+        with open('data.db', 'w') as f:
+            data = json.dump(self.model.todos, f)
 
 
-app = QApplication(sys.argv)
-
-w = MainWindow()
-w.show()
-
+app = QtWidgets.QApplication(sys.argv)
+window = MainWindow()
+window.show()
 app.exec()
