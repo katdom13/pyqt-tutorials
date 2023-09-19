@@ -10,6 +10,7 @@ packages = [{include = "pyqt_tutorials"}]
 python = "^3.9.13"
 pyqt6 = "6.4.2"
 pyqt6-tools = "^6.4.2.3.3"
+pandas = "^2.1.0"
 
 [tool.poetry.dev-dependencies]
 pytype = { version = ">=2020.06.01", markers = "python_version < '3.9' and platform_system != 'Windows'"}
