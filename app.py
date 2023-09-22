@@ -1,116 +1,65 @@
-# https://www.pythonguis.com/tutorials/pyqt6-qtableview-modelviews-numpy-pandas/
+# https://www.pythonguis.com/tutorials/pyqt6-plotting-pyqtgraph/
 
-# Displaying tabular data in Qt6 ModelViews
-# Create customized table views with conditional formatting, numpy and pandas data sources.
+# Plotting with PyQtGraph
+# Create custom plots in PyQt6 with PyQtGraph
 
-import sys
-from datetime import datetime
-from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtCore import Qt
-import pandas as pd
-
-COLORS = ['#053061', '#2166ac', '#4393c3', '#92c5de', '#d1e5f0', '#f7f7f7', '#fddbc7', '#f4a582', '#d6604d', '#b2182b', '#67001f']
-
-
-class TableModel(QtCore.QAbstractTableModel):
-    def __init__(self, data):
-        super(TableModel, self).__init__()
-        self._data = data
-
-    def data(self, index, role):
-        if role == Qt.ItemDataRole.DisplayRole:
-            # Get the raw value
-            value = self._data.iloc[index.row(), index.column()]
-
-            # Perform per-type checks and render accordingly.
-            if isinstance(value, datetime):
-                # Render time to YYY-MM-DD.
-                return str(value.strftime("%Y-%m-%d"))
-
-            if isinstance(value, float):
-                # Render float to 2 dp
-                return str("%.2f" % value)
-
-            if isinstance(value, str):
-                # Render strings with quotes
-                return str('"%s"' % value)
-
-            # Default (anything not captured above: e.g. int)
-            return str(value)
-
-        if role == Qt.ItemDataRole.TextAlignmentRole:
-            value = self._data.iloc[index.row(), index.column()]
-
-            if isinstance(value, int) or isinstance(value, float):
-                # Align right, vertical middle.
-                return Qt.AlignmentFlag.AlignVCenter + Qt.AlignmentFlag.AlignRight
-
-        if role == Qt.ItemDataRole.ForegroundRole:
-            value = self._data.iloc[index.row(), index.column()]
-
-            if (
-                (isinstance(value, int) or isinstance(value, float))
-                and value < 0
-            ):
-                return QtGui.QColor('red')
-
-        if role == Qt.ItemDataRole.BackgroundRole:
-            value = self._data.iloc[index.row(), index.column()]
-            if (isinstance(value, int) or isinstance(value, float)):
-                value = int(value)  # Convert to integer for indexing.
-
-                # Limit to range -5 ... +5, then convert to 0..10
-                value = max(-5, value) # values < -5 become -5
-                value = min(5, value)  # valaues > +5 become +5
-                value = value + 5     # -5 becomes 0, +5 becomes + 10
-
-                return QtGui.QColor(COLORS[value])
-
-        if role == Qt.ItemDataRole.DecorationRole:
-            value = self._data.iloc[index.row(), index.column()]
-            if isinstance(value, datetime):
-                return QtGui.QIcon('calendar.png')
-
-    def rowCount(self, index):
-        # The length of the outer list.
-        return self._data.shape[0]
-
-    def columnCount(self, index):
-        # The following takes the first sub-list, and returns
-        # the length (only works if all rows are an equal length)
-        return self._data.shape[1]
-
-    def headerData(self, section, orientation, role):
-        # section is the index of the column/row.
-        if role == Qt.ItemDataRole.DisplayRole:
-            if orientation == Qt.Orientation.Horizontal:
-                return str(self._data.columns[section])
-
-            if orientation == Qt.Orientation.Vertical:
-                return str(self._data.index[section])
+from PyQt6 import QtWidgets, QtCore
+from pyqtgraph import PlotWidget, plot
+import pyqtgraph as pg
+import sys  # We need sys so that we can pass argv to QApplication
+import os
+from random import randint
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
-        super().__init__()
 
-        self.table = QtWidgets.QTableView()
+    def __init__(self, *args, **kwargs):
+        super(MainWindow, self).__init__(*args, **kwargs)
 
-        data = pd.DataFrame([
-            [True, 9, 2],
-            [1, 0, -1],
-            [3, 5, False],
-            [3, 3, 2],
-            [datetime(2019, 5, 4), 8, 9],
-        ], columns = ['A', 'B', 'C'], index=['Row 1', 'Row 2', 'Row 3', 'Row 4', 'Row 5'])
+        self.graphWidget = pg.PlotWidget()
+        self.setCentralWidget(self.graphWidget)
 
-        self.model = TableModel(data)
-        self.table.setModel(self.model)
+        self.x = list(range(100))  # 100 time points
+        self.y1 = [randint(0,100) for _ in range(100)]  # 100 data points
+        self.y2 = [randint(0,100) for _ in range(100)]  # 100 data points
 
-        self.setCentralWidget(self.table)
+        self.graphWidget.setBackground('w')
+
+        # pen1 = pg.mkPen(color=(255, 0, 0))
+        # self.data_line_1 =  self.graphWidget.plot(self.x, self.y1, pen=pen1)
+
+        # pen2 = pg.mkPen(color=(0, 0, 255))
+        # self.data_line_2 =  self.graphWidget.plot(self.x, self.y2, pen=pen2)
+
+        self.data_line_1 = self.plot(self.x, self.y1, "numnum1", "red")
+        self.data_line_2 = self.plot(self.x, self.y2, "numnum1", "blue")
+
+        self.timer = QtCore.QTimer()
+        self.timer.setInterval(50)
+        self.timer.timeout.connect(self.update_plot_data)
+        self.timer.start()
+
+    def plot(self, x, y, plotname, color):
+        pen = pg.mkPen(color=color)
+        return self.graphWidget.plot(x, y, name=plotname, pen=pen)
+
+    def update_plot_data(self):
+
+        self.x = self.x[1:]  # Remove the first y element.
+        self.x.append(self.x[-1] + 1)  # Add a new value 1 higher than the last.
+
+        self.y1 = self.y1[1:]  # Remove the first
+        self.y1.append(randint(0,100))  # Add a new random value.
+
+        self.data_line_1.setData(self.x, self.y1)  # Update the data.
+
+        self.y2 = self.y2[1:]  # Remove the first
+        self.y2.append(randint(0,100))  # Add a new random value.
+
+        self.data_line_2.setData(self.x, self.y2)  # Update the data.
 
 
-app=QtWidgets.QApplication(sys.argv)
-window=MainWindow()
-window.show()
-app.exec()
+app = QtWidgets.QApplication(sys.argv)
+w = MainWindow()
+w.show()
+sys.exit(app.exec())
